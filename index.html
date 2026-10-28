@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vault - Personal Zero-Knowledge Password Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- ================= VIEW 1: UNLOCK / SETUP ================= -->
+    <div id="view-unlock" class="view active">
+      <div class="unlock-wrapper">
+        <div class="card">
+          <div class="brand-header">
+            <div class="logo-badge">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <h1>Unlock Vault</h1>
+            <p>End-to-end encrypted directly with your private GitHub repository.</p>
+          </div>
+
+          <div id="unlock-alert" class="alert-box alert-danger"></div>
+
+          <form id="form-unlock">
+            <div class="form-group">
+              <label for="gh-owner">GitHub Username or Org</label>
+              <input type="text" id="gh-owner" placeholder="e.g. octocat" required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+              <label for="gh-repo">Repository Name</label>
+              <input type="text" id="gh-repo" value="vault" required>
+            </div>
+
+            <div class="form-group">
+              <label for="gh-pat">Fine-Grained GitHub Token (PAT)</label>
+              <div class="input-wrapper">
+                <input type="password" id="gh-pat" placeholder="github_pat_..." required autocomplete="current-password">
+                <button type="button" class="input-suffix-btn toggle-pwd" data-target="gh-pat" title="Show/Hide">
+                  👁️
+                </button>
+              </div>
+              <p class="help-text">Scoped strictly to the private <code>vault</code> repo (Contents: Read & Write).</p>
+            </div>
+
+            <div class="form-group">
+              <label for="master-pwd">Master Password</label>
+              <div class="input-wrapper">
+                <input type="password" id="master-pwd" placeholder="Enter master password" required autocomplete="current-password">
+                <button type="button" class="input-suffix-btn toggle-pwd" data-target="master-pwd" title="Show/Hide">
+                  👁️
+                </button>
+              </div>
+              <p class="help-text">Derived locally via PBKDF2 (600,000 rounds). Never sent to any server.</p>
+            </div>
+
+            <button type="submit" id="btn-unlock-submit" class="btn btn-primary btn-block">
+              Unlock Vault
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= VIEW 2: VAULT DASHBOARD ================= -->
+    <div id="view-dashboard" class="view">
+      <!-- Header -->
+      <header class="app-header">
+        <div class="header-brand">
+          <div class="logo-badge" style="width: 36px; height: 36px; margin: 0;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h2>Vault</h2>
+          <span id="sync-status" class="sync-badge">
+            <span class="sync-dot"></span>
+            <span id="sync-text">Synced</span>
+          </span>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button id="btn-open-add" class="btn btn-primary btn-sm">
+            + New Entry
+          </button>
+          <button id="btn-lock" class="btn btn-secondary btn-sm" title="Lock vault & clear memory">
+            🔒 Lock
+          </button>
+        </div>
+      </header>
+
+      <!-- Search & Filters Toolbar -->
+      <div class="toolbar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" placeholder="Search by application, username, or email... (Press / to focus)">
+        </div>
+      </div>
+
+      <!-- Entries Container -->
+      <div id="entries-container">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ================= ADD / EDIT ENTRY MODAL ================= -->
+  <div id="modal-entry" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title">New Vault Entry</h3>
+        <button type="button" class="icon-btn" id="modal-close" style="border:none; font-size:1.2rem;">&times;</button>
+      </div>
+
+      <form id="form-entry">
+        <input type="hidden" id="entry-id">
+
+        <div class="form-group">
+          <label for="entry-app">Application / Service *</label>
+          <input type="text" id="entry-app" placeholder="e.g. GitHub, Google, Amazon" required>
+        </div>
+
+        <div class="form-group">
+          <label for="entry-user">Username</label>
+          <input type="text" id="entry-user" placeholder="e.g. dev_user">
+        </div>
+
+        <div class="form-group">
+          <label for="entry-email">Email</label>
+          <input type="text" id="entry-email" placeholder="e.g. user@example.com">
+        </div>
+
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label for="entry-pwd" style="margin-bottom: 0;">Password *</label>
+            <button type="button" id="btn-generate-pwd" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.78rem;">
+              ⚡ Generate Strong
+            </button>
+          </div>
+          <div class="input-wrapper">
+            <input type="password" id="entry-pwd" placeholder="Enter password" required>
+            <button type="button" class="input-suffix-btn toggle-pwd" data-target="entry-pwd" title="Show/Hide">
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="entry-url">Website URL (optional)</label>
+          <input type="url" id="entry-url" placeholder="https://...">
+        </div>
+
+        <div class="form-group">
+          <label for="entry-notes">Notes (optional)</label>
+          <textarea id="entry-notes" rows="2" placeholder="Recovery codes, PIN, or extra notes..."></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-entry" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btn-save-entry" class="btn btn-primary">Save to Vault</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <span id="toast-message">Copied to clipboard</span>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

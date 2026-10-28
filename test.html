@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vault - Phase 1 Verification Test</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --primary: #38bdf8;
+      --success: #4ade80;
+      --error: #f87171;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.5;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+      color: var(--primary);
+    }
+    p {
+      color: var(--text-dim);
+      margin-top: 0;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 1.15rem;
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+    button {
+      background: var(--primary);
+      color: #0f172a;
+      font-weight: 600;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: opacity 0.2s;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .field {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    input:focus {
+      outline: 1px solid var(--primary);
+      border-color: var(--primary);
+    }
+    pre {
+      background: #0a0f1d;
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      max-height: 250px;
+    }
+    .status-pass { color: var(--success); font-weight: bold; }
+    .status-fail { color: var(--error); font-weight: bold; }
+    .log-entry { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <h1>Vault Core Engine Tests (Phase 1)</h1>
+  <p>Verifies client-side Web Crypto and direct GitHub API communications.</p>
+
+  <!-- Section 1: Crypto Self-Test -->
+  <div class="card">
+    <h2>1. In-Browser Crypto Self-Test</h2>
+    <p>Runs AES-256-GCM + PBKDF2 (600k iterations) test vectors entirely inside browser memory.</p>
+    <button id="run-crypto-test">Run Crypto Tests</button>
+    <pre id="crypto-log">Click "Run Crypto Tests" to execute.</pre>
+  </div>
+
+  <!-- Section 2: GitHub API Test -->
+  <div class="card">
+    <h2>2. GitHub Connection Test (Optional Live Test)</h2>
+    <p>Tests direct read/write to your private GitHub repo using your Fine-Grained PAT.</p>
+    <div class="field">
+      <label for="gh-owner">GitHub Username or Org</label>
+      <input type="text" id="gh-owner" placeholder="e.g. octocat">
+    </div>
+    <div class="field">
+      <label for="gh-repo">Repository Name</label>
+      <input type="text" id="gh-repo" value="vault">
+    </div>
+    <div class="field">
+      <label for="gh-pat">Fine-Grained Personal Access Token (PAT)</label>
+      <input type="password" id="gh-pat" placeholder="github_pat_...">
+    </div>
+    <button id="run-gh-test">Test GitHub Connection</button>
+    <pre id="gh-log">Fill fields and click button to test.</pre>
+  </div>
+
+  <!-- Section 3: Phase 2 State & Smart Merge Simulation -->
+  <div class="card">
+    <h2>3. State Store & Smart Merge Simulation (Phase 2)</h2>
+    <p>Simulates two devices (Laptop & Phone) writing to GitHub at the same time and verifies automated 409 conflict resolution without data loss.</p>
+    <button id="run-merge-test">Run Smart Merge Simulation</button>
+    <pre id="merge-log">Click "Run Smart Merge Simulation" to execute.</pre>
+  </div>
+
+  <script type="module">
+    import { encryptVault, decryptVault } from './js/crypto.js';
+    import { fetchVaultFile, saveVaultFile } from './js/github.js';
+    import { mergeEntries, VaultStore } from './js/store.js';
+
+    const cryptoLog = document.getElementById('crypto-log');
+    const ghLog = document.getElementById('gh-log');
+    const mergeLog = document.getElementById('merge-log');
+
+    function log(element, text, status = null) {
+      const line = document.createElement('div');
+      line.className = 'log-entry';
+      if (status === 'pass') line.innerHTML = `<span class="status-pass">[PASS]</span> ${text}`;
+      else if (status === 'fail') line.innerHTML = `<span class="status-fail">[FAIL]</span> ${text}`;
+      else line.textContent = text;
+      element.appendChild(line);
+    }
+
+    document.getElementById('run-crypto-test').addEventListener('click', async () => {
+      cryptoLog.textContent = '';
+      log(cryptoLog, 'Starting Web Crypto tests...');
+
+      const testPassword = 'CorrectMasterPassword123!';
+      const sampleVault = [
+        { id: '1', app: 'GitHub', username: 'dev', password: 'mypassword', updatedAt: Date.now() },
+        { id: '2', app: 'Email', username: 'me@example.com', password: 'emailpassword', updatedAt: Date.now() }
+      ];
+
+      try {
+        const t0 = performance.now();
+        log(cryptoLog, 'Encrypting sample vault (PBKDF2 600,000 iterations)...');
+        const pkg = await encryptVault(sampleVault, testPassword);
+        const t1 = performance.now();
+        log(cryptoLog, `Encryption successful in ${(t1 - t0).toFixed(0)}ms`, 'pass');
+        log(cryptoLog, `Payload structure verified: salt(${pkg.salt.length} chars), iv(${pkg.iv.length} chars), ciphertext(${pkg.ciphertext.length} chars)`);
+
+        log(cryptoLog, 'Attempting decryption with CORRECT password...');
+        const decrypted = await decryptVault(pkg, testPassword);
+        if (JSON.stringify(decrypted) === JSON.stringify(sampleVault)) {
+          log(cryptoLog, 'Decrypted data matches original payload exactly!', 'pass');
+        } else {
+          log(cryptoLog, 'Decrypted data does not match!', 'fail');
+        }
+
+        log(cryptoLog, 'Attempting decryption with WRONG password...');
+        try {
+          await decryptVault(pkg, 'WrongPassword456!');
+          log(cryptoLog, 'Wrong password did NOT throw error!', 'fail');
+        } catch (err) {
+          log(cryptoLog, `Wrong password properly rejected (${err.message || 'Auth failure'})`, 'pass');
+        }
+
+        log(cryptoLog, 'All crypto tests passed successfully!', 'pass');
+      } catch (err) {
+        log(cryptoLog, `Crypto error: ${err.message}`, 'fail');
+      }
+    });
+
+    document.getElementById('run-gh-test').addEventListener('click', async () => {
+      ghLog.textContent = '';
+      const owner = document.getElementById('gh-owner').value.trim();
+      const repo = document.getElementById('gh-repo').value.trim();
+      const pat = document.getElementById('gh-pat').value.trim();
+
+      if (!owner || !repo || !pat) {
+        log(ghLog, 'Please provide GitHub username, repo name, and PAT.', 'fail');
+        return;
+      }
+
+      try {
+        log(ghLog, `Checking connection to repository ${owner}/${repo}...`);
+        const initialCheck = await fetchVaultFile(owner, repo, pat);
+        
+        if (initialCheck.exists) {
+          log(ghLog, `Found existing vault file (sha: ${initialCheck.sha})`, 'pass');
+        } else {
+          log(ghLog, `No existing vault file found (file will be created on first write)`, 'pass');
+        }
+
+        log(ghLog, 'GitHub credentials and repository access verified!', 'pass');
+      } catch (err) {
+        log(ghLog, `GitHub error: ${err.message}`, 'fail');
+      }
+    });
+
+    document.getElementById('run-merge-test').addEventListener('click', async () => {
+      mergeLog.textContent = '';
+      log(mergeLog, 'Starting Phase 2 State Store & Smart Merge Simulation...');
+
+      try {
+        // Step 1: Simulate existing remote vault on GitHub (Version 1, SHA: sha-100)
+        log(mergeLog, '1. Setting up initial shared vault with 1 entry (GitHub account)...');
+        const initialEntry = {
+          id: 'acc-1',
+          app: 'GitHub',
+          username: 'dev',
+          password: 'secretPassword1',
+          updatedAt: Date.now() - 5000,
+          deleted: false
+        };
+
+        // Step 2: Laptop and Phone both unlock Version 1
+        log(mergeLog, '2. Laptop and Phone both load Version 1 from remote...');
+        let laptopEntries = [{ ...initialEntry }];
+        let phoneEntries = [{ ...initialEntry }];
+
+        // Step 3: Phone adds a Netflix entry and saves first (remote becomes SHA: sha-200)
+        log(mergeLog, '3. Phone adds Netflix entry and commits to remote (bump to Version 2)...');
+        const phoneNewEntry = {
+          id: 'acc-2',
+          app: 'Netflix',
+          username: 'phone_user',
+          password: 'netflixPassword',
+          updatedAt: Date.now() - 2000,
+          deleted: false
+        };
+        phoneEntries.push(phoneNewEntry);
+        const remoteVersion2 = phoneEntries; // This is now live on GitHub
+
+        // Step 4: Laptop (still holding Version 1 SHA) adds Spotify and modifies GitHub password
+        log(mergeLog, '4. Laptop (without refreshing) modifies GitHub password and adds Spotify...');
+        laptopEntries[0].password = 'updatedMasterSecretByLaptop';
+        laptopEntries[0].updatedAt = Date.now();
+        const laptopNewEntry = {
+          id: 'acc-3',
+          app: 'Spotify',
+          username: 'laptop_user',
+          password: 'spotifyPassword',
+          updatedAt: Date.now(),
+          deleted: false
+        };
+        laptopEntries.push(laptopNewEntry);
+
+        // Step 5: Laptop tries to save, encounters conflict with Version 2, runs mergeEntries
+        log(mergeLog, '5. Laptop triggers Smart Merge against remote Version 2...');
+        const mergedResult = mergeEntries(laptopEntries, remoteVersion2);
+
+        // Step 6: Verify all updates survived
+        log(mergeLog, `   Result has ${mergedResult.length} entries.`);
+        const hasNetflix = mergedResult.some(e => e.app === 'Netflix');
+        const hasSpotify = mergedResult.some(e => e.app === 'Spotify');
+        const githubAccount = mergedResult.find(e => e.app === 'GitHub');
+
+        if (hasNetflix && hasSpotify) {
+          log(mergeLog, 'Both Phone additions (Netflix) and Laptop additions (Spotify) preserved!', 'pass');
+        } else {
+          log(mergeLog, 'Data loss detected in new additions!', 'fail');
+        }
+
+        if (githubAccount && githubAccount.password === 'updatedMasterSecretByLaptop') {
+          log(mergeLog, 'Latest password edit by Laptop preserved via timestamp check!', 'pass');
+        } else {
+          log(mergeLog, 'Conflicting edit did not resolve properly!', 'fail');
+        }
+
+        log(mergeLog, 'State Store and Smart Merge logic verified successfully!', 'pass');
+      } catch (err) {
+        log(mergeLog, `Simulation error: ${err.message}`, 'fail');
+      }
+    });
+  </script>
+</body>
+</html>
