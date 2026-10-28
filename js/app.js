@@ -288,9 +288,11 @@ async function triggerSync() {
   try {
     const res = await store.sync();
     setSyncState(false, res.merged ? 'Synced (Merged updates)' : 'Synced');
+    return res;
   } catch (err) {
     setSyncState(false, 'Sync failed');
-    showToast(`Sync error: ${err.message}`, 4000);
+    console.error('Sync failed:', err);
+    throw err;
   }
 }
 
@@ -389,6 +391,8 @@ btnCancelEntry.addEventListener('click', closeModal);
 formEntry.addEventListener('submit', async (e) => {
   e.preventDefault();
   btnSaveEntry.disabled = true;
+  const originalBtnText = btnSaveEntry.textContent;
+  btnSaveEntry.textContent = 'Encrypting & Saving...';
 
   const id = entryIdInput.value;
   const payload = {
@@ -403,19 +407,21 @@ formEntry.addEventListener('submit', async (e) => {
   try {
     if (id) {
       store.updateEntry(id, payload);
-      showToast('Entry updated!');
     } else {
       store.addEntry(payload);
-      showToast('New entry added!');
     }
+
+    // Must wait for GitHub sync to succeed before closing modal
+    await triggerSync();
 
     closeModal();
     renderEntries(searchInput.value);
-    await triggerSync();
+    showToast(id ? 'Entry updated & saved to GitHub!' : 'New entry saved to GitHub!');
   } catch (err) {
-    alert(`Failed to save entry: ${err.message}`);
+    alert(`Failed to save to GitHub:\n\n${err.message}\n\nPlease verify your repository name and that your PAT has "Contents: Read & Write" permissions.`);
   } finally {
     btnSaveEntry.disabled = false;
+    btnSaveEntry.textContent = originalBtnText;
   }
 });
 

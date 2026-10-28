@@ -28,10 +28,46 @@ function base64ToUtf8(base64) {
 }
 
 /**
+ * Verifies that the repository exists and the PAT has authorization.
+ */
+export async function verifyRepoAccess(owner, repo, pat) {
+  const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/vnd.github.v3+json',
+      'Authorization': `Bearer ${pat.trim()}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+
+  if (res.status === 401) {
+    throw new Error('Invalid GitHub Personal Access Token (PAT).');
+  }
+
+  if (res.status === 404) {
+    throw new Error(
+      `Repository "${owner}/${repo}" not found or PAT lacks permission. Check that the repo is created and your Fine-Grained PAT includes "${repo}".`
+    );
+  }
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`GitHub error (${res.status}): ${errorText}`);
+  }
+
+  return true;
+}
+
+/**
  * Fetches the encrypted vault file and its commit SHA from GitHub.
  * Returns { exists: false, sha: null, data: null } if the file hasn't been created yet (404).
  */
 export async function fetchVaultFile(owner, repo, pat) {
+  // First ensure the repository itself exists and token has access
+  await verifyRepoAccess(owner, repo, pat);
+
   const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${VAULT_FILE_PATH}`;
 
   const res = await fetch(url, {
